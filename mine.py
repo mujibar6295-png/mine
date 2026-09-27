@@ -531,13 +531,12 @@ async def web_app_data_handler(message: types.Message):
         await message.answer("❌ Error processing reward. Please contact support.")
 
 async def main():
-    # Run Flask in a separate background thread
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
     
-    # Run Aiogram polling
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main)
+    # Fixed here: main() called with parentheses
+    asyncio.run(main())
