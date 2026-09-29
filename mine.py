@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sqlite3
-import json
 import os
 from threading import Thread
 from flask import Flask
@@ -134,7 +133,7 @@ class WithdrawStates(StatesGroup):
     waiting_for_upi = State()
     waiting_for_amount = State()
 
-# নিচের সব বাটন নিয়ে তৈরি পারফেক্ট Reply Keyboard
+# Reply Keyboard (যেখান থেকে WebApp ওপেন করলে ডেটা বটের কাছে আসবে)
 def get_main_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -179,7 +178,7 @@ async def cmd_start(message: types.Message):
     welcome_msg = (
         f"👋 Welcome to **AdsMine Bot**, {username}!\n\n"
         f"Your ultimate platform to earn rewards by watching short ads, completing referrals, and more.\n\n"
-        f"Choose an option from the keyboard menu below:"
+        f"👇 **Choose an option from the keyboard menu below:**"
     )
     await message.answer(welcome_msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
@@ -231,8 +230,7 @@ async def account_menu(message: types.Message):
             f"🆔 **User ID:** `{user_id}`\n"
             f"💰 **Balance:** `₹{balance:.2f}`\n"
             f"📺 **Ads Watched:** `{ads_watched}`\n"
-            f"👥 **Total Referrals:** `{total_refs}`\n\n"
-            f"Keep watching ads and inviting friends to increase your earnings!"
+            f"👥 **Total Referrals:** `{total_refs}`"
         )
         await message.answer(text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
@@ -246,10 +244,9 @@ async def ref_menu(message: types.Message):
     
     text = (
         f"🤝 **Referral & Earn Program**\n\n"
-        f"Invite your friends and earn instant rewards plus lifetime passive income!\n\n"
-        f"🎁 **Instant Reward:** Get `₹{ref_value}` when your referred user joins and verifies.\n"
-        f"🔄 **Lifetime Commission:** Earn **5%** commission on your referrals' activity forever!\n\n"
-        f"🔗 **Your Unique Referral Link:**\n`{ref_link}`"
+        f"🎁 **Instant Reward:** Get `₹{ref_value}` when your referred user joins.\n"
+        f"🔄 **Lifetime Commission:** Earn **5%** commission on your referrals' activity!\n\n"
+        f"🔗 **Your Unique Link:**\n`{ref_link}`"
     )
     await message.answer(text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
@@ -257,7 +254,7 @@ async def ref_menu(message: types.Message):
 @dp.message(F.text == "📞 Support")
 async def support_menu(message: types.Message, state: FSMContext):
     await message.answer(
-        "📞 **Customer Support**\n\nPlease type your issue or query below, and it will be forwarded directly to our admin team.\n\n*(Type /cancel to abort)*",
+        "📞 **Customer Support**\n\nPlease type your issue or query below. (Type /cancel to abort)",
         parse_mode="Markdown"
     )
     await state.set_state(SupportStates.waiting_for_message)
@@ -285,7 +282,7 @@ async def process_support_msg(message: types.Message, state: FSMContext):
         reply_markup=admin_kb,
         parse_mode="Markdown"
     )
-    await message.answer("✅ Your message has been sent to support. An admin will reply to you soon.", reply_markup=get_main_keyboard())
+    await message.answer("✅ Message sent to support.", reply_markup=get_main_keyboard())
 
 @dp.callback_query(F.data.regexp(r"^reply_user_(\d+)$"))
 async def admin_reply_prompt(callback: types.CallbackQuery, state: FSMContext):
@@ -303,7 +300,7 @@ async def send_admin_reply(message: types.Message, state: FSMContext):
     
     try:
         await bot.send_message(target_user, f"📩 **Admin Reply:**\n\n{reply_text}", parse_mode="Markdown")
-        await message.answer("✅ Reply sent successfully to the user.")
+        await message.answer("✅ Reply sent successfully.")
     except Exception as e:
         await message.answer(f"❌ Failed to send reply: {e}")
 
@@ -326,7 +323,7 @@ async def withdraw_menu(message: types.Message, state: FSMContext):
         return
         
     await message.answer(
-        f"💳 **Withdrawal Section**\n\nYour Balance: `₹{balance:.2f}`\nMinimum Withdraw: `₹{min_w}`\n\nPlease enter your **UPI ID** (e.g., username@paytm / ybl):",
+        f"💳 **Withdrawal Section**\n\nYour Balance: `₹{balance:.2f}`\n\nPlease enter your **UPI ID**:",
         parse_mode="Markdown"
     )
     await state.set_state(WithdrawStates.waiting_for_upi)
@@ -343,7 +340,7 @@ async def process_withdraw_upi(message: types.Message, state: FSMContext):
     balance = cursor.fetchone()[0]
     conn.close()
     
-    await message.answer(f"💵 Enter withdrawal amount (Max `₹{balance:.2f}`):", parse_mode="Markdown")
+    await message.answer(f"💵 Enter amount (Max `₹{balance:.2f}`):", parse_mode="Markdown")
     await state.set_state(WithdrawStates.waiting_for_amount)
 
 @dp.message(WithdrawStates.waiting_for_amount)
@@ -351,7 +348,7 @@ async def process_withdraw_amount(message: types.Message, state: FSMContext):
     try:
         amount = float(message.text.strip())
     except ValueError:
-        await message.answer("❌ Invalid amount. Please enter a valid number:")
+        await message.answer("❌ Invalid amount.")
         return
         
     user_id = message.from_user.id
@@ -381,12 +378,12 @@ async def process_withdraw_amount(message: types.Message, state: FSMContext):
     
     await bot.send_message(
         ADMIN_ID,
-        f"🔔 **New Withdrawal Request**\n\nUser ID: `{user_id}`\nUPI ID: `{upi_id}`\nAmount: `₹{amount}`",
+        f"🔔 **New Withdrawal Request**\n\nUser ID: `{user_id}`\nUPI: `{upi_id}`\nAmount: `₹{amount}`",
         reply_markup=admin_kb,
         parse_mode="Markdown"
     )
     
-    await message.answer("✅ **Withdrawal Request Submitted!** Admin will review and process your payment shortly.", reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    await message.answer("✅ **Request Submitted!**", reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 @dp.callback_query(F.data.startswith("wd_"))
 async def admin_wd_action(callback: types.CallbackQuery):
@@ -401,148 +398,125 @@ async def admin_wd_action(callback: types.CallbackQuery):
     if action == "paid":
         conn.close()
         try:
-            await bot.send_message(user_id, f"🎉 **Withdrawal Successful!**\n\nYour withdrawal of `₹{amount}` has been paid to your UPI ID.", parse_mode="Markdown")
+            await bot.send_message(user_id, f"🎉 **Withdrawal Successful!** `₹{amount}` has been paid.", parse_mode="Markdown")
         except:
             pass
-        await callback.message.edit_text(callback.message.text + "\n\n**[STATUS: PAID & VERIFIED]**")
+        await callback.message.edit_text(callback.message.text + "\n\n**[PAID]**")
     elif action == "reject":
         cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
         conn.commit()
         conn.close()
         try:
-            await bot.send_message(user_id, f"❌ **Withdrawal Rejected!**\n\nYour withdrawal of `₹{amount}` was rejected by admin. Amount refunded to your balance.", parse_mode="Markdown")
+            await bot.send_message(user_id, f"❌ **Withdrawal Rejected!** `₹{amount}` refunded.", parse_mode="Markdown")
         except:
             pass
-        await callback.message.edit_text(callback.message.text + "\n\n**[STATUS: REJECTED & REFUNDED]**")
+        await callback.message.edit_text(callback.message.text + "\n\n**[REJECTED & REFUNDED]**")
 
+# Admin Commands
 @dp.message(Command("addchannel"))
 async def cmd_addchannel(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+    if message.from_user.id != ADMIN_ID: return
     args = message.text.split(maxsplit=2)
-    if len(args) < 3:
-        await message.reply("Usage: `/addchannel <chat_id> <invite_link>`", parse_mode="Markdown")
-        return
-    chat_id, invite_link = args[1], args[2]
-    
+    if len(args) < 3: return
     conn = sqlite3.connect("bot_database.db")
     cursor = conn.cursor()
-    cursor.execute("REPLACE INTO channels (chat_id, invite_link) VALUES (?, ?)", (chat_id, invite_link))
+    cursor.execute("REPLACE INTO channels (chat_id, invite_link) VALUES (?, ?)", (args[1], args[2]))
     conn.commit()
     conn.close()
-    await message.reply(f"✅ Channel `{chat_id}` added successfully for Force Join.")
+    await message.reply("✅ Channel added.")
 
 @dp.message(Command("adsvalue"))
 async def cmd_adsvalue(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+    if message.from_user.id != ADMIN_ID: return
     args = message.text.split()
-    if len(args) < 2:
-        await message.reply(f"Current Ad Reward Value: `₹{get_setting('ads_value')}`\nUsage: `/adsvalue <amount>`", parse_mode="Markdown")
-        return
+    if len(args) < 2: return
     update_setting("ads_value", args[1])
     await message.reply(f"✅ Ad reward value updated to `₹{args[1]}`", parse_mode="Markdown")
 
 @dp.message(Command("minwithdraw"))
 async def cmd_minwithdraw(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+    if message.from_user.id != ADMIN_ID: return
     args = message.text.split()
-    if len(args) < 2:
-        await message.reply(f"Current Minimum Withdraw: `₹{get_setting('min_withdraw')}`\nUsage: `/minwithdraw <amount>`", parse_mode="Markdown")
-        return
+    if len(args) < 2: return
     update_setting("min_withdraw", args[1])
     await message.reply(f"✅ Minimum withdrawal limit updated to `₹{args[1]}`", parse_mode="Markdown")
 
 @dp.message(Command("refvalue"))
 async def cmd_refvalue(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+    if message.from_user.id != ADMIN_ID: return
     args = message.text.split()
-    if len(args) < 2:
-        await message.reply(f"Current Referral Bonus: `₹{get_setting('ref_value')}`\nUsage: `/refvalue <amount>`", parse_mode="Markdown")
-        return
+    if len(args) < 2: return
     update_setting("ref_value", args[1])
     await message.reply(f"✅ Referral bonus updated to `₹{args[1]}`", parse_mode="Markdown")
 
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+    if message.from_user.id != ADMIN_ID: return
     text = message.text.replace("/broadcast", "").strip()
-    if not text:
-        await message.reply("Usage: `/broadcast <message>`", parse_mode="Markdown")
-        return
-        
+    if not text: return
     conn = sqlite3.connect("bot_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users")
     users = cursor.fetchall()
     conn.close()
-    
     count = 0
     for (uid,) in users:
         try:
             await bot.send_message(uid, text, parse_mode="Markdown")
             count += 1
             await asyncio.sleep(0.05)
-        except:
-            pass
+        except: pass
     await message.reply(f"✅ Broadcast completed to {count} users.")
 
 @dp.message(Command("userlist"))
 async def cmd_userlist(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
+    if message.from_user.id != ADMIN_ID: return
     conn = sqlite3.connect("bot_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, username, balance, ads_watched, total_referrals FROM users")
     users = cursor.fetchall()
     conn.close()
-    
     filename = "userlist.txt"
     with open(filename, "w", encoding="utf-8") as f:
         f.write("UserID | Username | Balance | Ads Watched | Total Referrals\n")
         f.write("-" * 65 + "\n")
         for u in users:
             f.write(f"{u[0]} | @{u[1]} | {u[2]} | {u[3]} | {u[4]}\n")
-            
     await message.reply_document(types.FSInputFile(filename), caption="📊 **Complete User Database Export**", parse_mode="Markdown")
 
-# Mini App থেকে আসা data হ্যান্ডলার (Reply Keyboard-এর বাটন দিয়ে খোলার কারণে tg.sendData কাজ করবে)
+# 🎯 FINAL FIX: Mini App থেকে আসা ডেটা হ্যান্ডলার
 @dp.message(F.web_app_data)
 async def web_app_data_handler(message: types.Message):
-    try:
-        data = json.loads(message.web_app_data.data)
-        if data.get("event") == "ad_completed":
-            user_id = message.from_user.id
-            ad_reward = float(get_setting("ads_value"))
-            
-            conn = sqlite3.connect("bot_database.db")
-            cursor = conn.cursor()
-            
-            cursor.execute("UPDATE users SET balance = balance + ?, ads_watched = ads_watched + 1 WHERE user_id = ?", (ad_reward, user_id))
-            
-            # Referral commission
-            cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                ref_id = row[0]
-                commission = ad_reward * 0.05
-                cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (commission, ref_id))
-                try:
-                    await bot.send_message(ref_id, f"💸 **Referral Commission:** You earned `₹{commission:.4f}`.", parse_mode="Markdown")
-                except:
-                    pass
-                    
-            conn.commit()
-            conn.close()
-            
-            # চ্যাটে কনফার্মেশন পাঠানো
-            await message.reply(f"✅ **Reward Credited!**\n\n+₹{ad_reward:.2f} has been added to your balance.", reply_markup=get_main_keyboard(), parse_mode="Markdown")
-    except Exception as e:
-        await message.reply("❌ Error processing reward.", reply_markup=get_main_keyboard())
+    # আমরা JSON এর বদলে সিম্পল টেক্সট রিসিভ করছি (index.html থেকে)
+    data = message.web_app_data.data
+    
+    if data == "ad_completed_success":
+        user_id = message.from_user.id
+        ad_reward = float(get_setting("ads_value"))
+        
+        conn = sqlite3.connect("bot_database.db")
+        cursor = conn.cursor()
+        
+        # User ব্যালেন্স আপডেট
+        cursor.execute("UPDATE users SET balance = balance + ?, ads_watched = ads_watched + 1 WHERE user_id = ?", (ad_reward, user_id))
+        
+        # 5% Referral Commission
+        cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        if row and row[0]:
+            ref_id = row[0]
+            commission = ad_reward * 0.05
+            cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (commission, ref_id))
+            try:
+                await bot.send_message(ref_id, f"💸 **Referral Commission:** You earned `₹{commission:.4f}`.", parse_mode="Markdown")
+            except:
+                pass
+                
+        conn.commit()
+        conn.close()
+        
+        # ব্যালেন্স অ্যাড হওয়ার কনফার্মেশন
+        await message.reply(f"✅ **Reward Credited!**\n\n+₹{ad_reward:.2f} has been added to your balance.", reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 async def main():
     flask_thread = Thread(target=run_flask)
