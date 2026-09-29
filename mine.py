@@ -9,7 +9,13 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import (
+    InlineKeyboardMarkup, 
+    InlineKeyboardButton, 
+    ReplyKeyboardMarkup, 
+    KeyboardButton, 
+    WebAppInfo
+)
 
 # Configuration Constants
 TOKEN = "8984910379:AAHoZiQey_EEvTKqjugqRphsCIH7J9tqd_A"
@@ -128,13 +134,21 @@ class WithdrawStates(StatesGroup):
     waiting_for_upi = State()
     waiting_for_amount = State()
 
+# Reply keyboard for WebApp so tg.sendData works flawlessly
+def main_reply_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📺 Watch Ads & Earn", web_app=WebAppInfo(url=WEB_APP_URL))]
+        ],
+        resize_keyboard=True
+    )
+
 def main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 Account", callback_data="menu_account"),
-         InlineKeyboardButton(text="📺 Watch Ads & Earn", web_app=WebAppInfo(url=WEB_APP_URL))],
-        [InlineKeyboardButton(text="💳 Withdraw", callback_data="menu_withdraw"),
-         InlineKeyboardButton(text="🤝 Ref & Earn", callback_data="menu_ref")],
-        [InlineKeyboardButton(text="📞 Support", callback_data="menu_support")]
+         InlineKeyboardButton(text="💳 Withdraw", callback_data="menu_withdraw")],
+        [InlineKeyboardButton(text="🤝 Ref & Earn", callback_data="menu_ref"),
+         InlineKeyboardButton(text="📞 Support", callback_data="menu_support")]
     ])
 
 @dp.message(Command("start"))
@@ -171,8 +185,10 @@ async def cmd_start(message: types.Message):
     welcome_msg = (
         f"👋 Welcome to **AdsMine Bot**, {username}!\n\n"
         f"Your ultimate platform to earn rewards by watching short ads, completing referrals, and more.\n\n"
-        f"Select an option from the menu below to get started:"
+        f"Tap **'📺 Watch Ads & Earn'** on your keyboard below to watch ads, or choose an option:"
     )
+    # Send reply keyboard first to activate bottom webapp button
+    await message.answer("Tap bottom menu button anytime to watch ads 👇", reply_markup=main_reply_keyboard())
     await message.answer(welcome_msg, reply_markup=main_menu(), parse_mode="Markdown")
 
 @dp.callback_query(F.data == "verify_join")
@@ -202,6 +218,7 @@ async def verify_join_callback(callback: types.CallbackQuery):
                 pass
         conn.close()
 
+        await callback.message.answer("Menu button ready 👇", reply_markup=main_reply_keyboard())
         await callback.message.answer("✅ **Verification Successful!** Welcome aboard.", reply_markup=main_menu(), parse_mode="Markdown")
     else:
         await callback.answer("❌ You have not joined all required channels yet!", show_alert=True)
@@ -499,6 +516,7 @@ async def cmd_userlist(message: types.Message):
             
     await message.reply_document(types.FSInputFile(filename), caption="📊 **Complete User Database Export**", parse_mode="Markdown")
 
+# Handle WebApp Data (Fixed & works when sent from reply button WebApp)
 @dp.message(F.web_app_data)
 async def web_app_data_handler(message: types.Message):
     try:
@@ -512,6 +530,7 @@ async def web_app_data_handler(message: types.Message):
             
             cursor.execute("UPDATE users SET balance = balance + ?, ads_watched = ads_watched + 1 WHERE user_id = ?", (ad_reward, user_id))
             
+            # 5% Referral Commission
             cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
             if row and row[0]:
@@ -526,9 +545,10 @@ async def web_app_data_handler(message: types.Message):
             conn.commit()
             conn.close()
             
-            await message.answer(f"🎉 **Reward Credited!**\n\n`₹{ad_reward}` has been added to your balance for watching the ad.", reply_markup=main_menu(), parse_mode="Markdown")
+            # Short reward notification
+            await message.reply(f"✅ **Reward Credited!**\n\n+₹{ad_reward:.2f} has been added to your balance.", parse_mode="Markdown")
     except Exception as e:
-        await message.answer("❌ Error processing reward. Please contact support.")
+        await message.reply("❌ Error processing reward. Please contact support.")
 
 async def main():
     flask_thread = Thread(target=run_flask)
@@ -538,5 +558,4 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # Fixed here: main() called with parentheses
     asyncio.run(main())
