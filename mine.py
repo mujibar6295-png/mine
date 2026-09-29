@@ -10,11 +10,11 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
-    InlineKeyboardMarkup, 
-    InlineKeyboardButton, 
     ReplyKeyboardMarkup, 
     KeyboardButton, 
-    WebAppInfo
+    WebAppInfo,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
 )
 
 # Configuration Constants
@@ -134,22 +134,16 @@ class WithdrawStates(StatesGroup):
     waiting_for_upi = State()
     waiting_for_amount = State()
 
-# Reply keyboard for WebApp so tg.sendData works flawlessly
-def main_reply_keyboard():
+# নিচের সব বাটন নিয়ে তৈরি পারফেক্ট Reply Keyboard
+def get_main_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📺 Watch Ads & Earn", web_app=WebAppInfo(url=WEB_APP_URL))]
+            [KeyboardButton(text="📺 Watch Ads & Earn", web_app=WebAppInfo(url=WEB_APP_URL))],
+            [KeyboardButton(text="👤 Account"), KeyboardButton(text="💳 Withdraw")],
+            [KeyboardButton(text="🤝 Ref & Earn"), KeyboardButton(text="📞 Support")]
         ],
         resize_keyboard=True
     )
-
-def main_menu():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Account", callback_data="menu_account"),
-         InlineKeyboardButton(text="💳 Withdraw", callback_data="menu_withdraw")],
-        [InlineKeyboardButton(text="🤝 Ref & Earn", callback_data="menu_ref"),
-         InlineKeyboardButton(text="📞 Support", callback_data="menu_support")]
-    ])
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -185,11 +179,9 @@ async def cmd_start(message: types.Message):
     welcome_msg = (
         f"👋 Welcome to **AdsMine Bot**, {username}!\n\n"
         f"Your ultimate platform to earn rewards by watching short ads, completing referrals, and more.\n\n"
-        f"Tap **'📺 Watch Ads & Earn'** on your keyboard below to watch ads, or choose an option:"
+        f"Choose an option from the keyboard menu below:"
     )
-    # Send reply keyboard first to activate bottom webapp button
-    await message.answer("Tap bottom menu button anytime to watch ads 👇", reply_markup=main_reply_keyboard())
-    await message.answer(welcome_msg, reply_markup=main_menu(), parse_mode="Markdown")
+    await message.answer(welcome_msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 @dp.callback_query(F.data == "verify_join")
 async def verify_join_callback(callback: types.CallbackQuery):
@@ -218,14 +210,14 @@ async def verify_join_callback(callback: types.CallbackQuery):
                 pass
         conn.close()
 
-        await callback.message.answer("Menu button ready 👇", reply_markup=main_reply_keyboard())
-        await callback.message.answer("✅ **Verification Successful!** Welcome aboard.", reply_markup=main_menu(), parse_mode="Markdown")
+        await callback.message.answer("✅ **Verification Successful!** Welcome aboard.", reply_markup=get_main_keyboard(), parse_mode="Markdown")
     else:
         await callback.answer("❌ You have not joined all required channels yet!", show_alert=True)
 
-@dp.callback_query(F.data == "menu_account")
-async def account_menu(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
+# 👤 Account Button
+@dp.message(F.text == "👤 Account")
+async def account_menu(message: types.Message):
+    user_id = message.from_user.id
     conn = sqlite3.connect("bot_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT balance, ads_watched, total_referrals FROM users WHERE user_id = ?", (user_id,))
@@ -242,15 +234,12 @@ async def account_menu(callback: types.CallbackQuery):
             f"👥 **Total Referrals:** `{total_refs}`\n\n"
             f"Keep watching ads and inviting friends to increase your earnings!"
         )
-        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Back", callback_data="back_home")]]), parse_mode="Markdown")
+        await message.answer(text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
-@dp.callback_query(F.data == "back_home")
-async def back_home(callback: types.CallbackQuery):
-    await callback.message.edit_text("🏠 **Main Menu:**", reply_markup=main_menu(), parse_mode="Markdown")
-
-@dp.callback_query(F.data == "menu_ref")
-async def ref_menu(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
+# 🤝 Ref & Earn Button
+@dp.message(F.text == "🤝 Ref & Earn")
+async def ref_menu(message: types.Message):
+    user_id = message.from_user.id
     bot_info = await bot.get_me()
     ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
     ref_value = get_setting("ref_value")
@@ -262,16 +251,21 @@ async def ref_menu(callback: types.CallbackQuery):
         f"🔄 **Lifetime Commission:** Earn **5%** commission on your referrals' activity forever!\n\n"
         f"🔗 **Your Unique Referral Link:**\n`{ref_link}`"
     )
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Back", callback_data="back_home")]]), parse_mode="Markdown")
+    await message.answer(text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
-@dp.callback_query(F.data == "menu_support")
-async def support_menu(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_text(
-        "📞 **Customer Support**\n\nPlease type your issue or query below, and it will be forwarded directly to our admin team.",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Back", callback_data="back_home")]]),
+# 📞 Support Button
+@dp.message(F.text == "📞 Support")
+async def support_menu(message: types.Message, state: FSMContext):
+    await message.answer(
+        "📞 **Customer Support**\n\nPlease type your issue or query below, and it will be forwarded directly to our admin team.\n\n*(Type /cancel to abort)*",
         parse_mode="Markdown"
     )
     await state.set_state(SupportStates.waiting_for_message)
+
+@dp.message(Command("cancel"))
+async def cancel_handler(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Action cancelled.", reply_markup=get_main_keyboard())
 
 @dp.message(SupportStates.waiting_for_message)
 async def process_support_msg(message: types.Message, state: FSMContext):
@@ -291,7 +285,7 @@ async def process_support_msg(message: types.Message, state: FSMContext):
         reply_markup=admin_kb,
         parse_mode="Markdown"
     )
-    await message.answer("✅ Your message has been sent to support. An admin will reply to you soon.", reply_markup=main_menu())
+    await message.answer("✅ Your message has been sent to support. An admin will reply to you soon.", reply_markup=get_main_keyboard())
 
 @dp.callback_query(F.data.regexp(r"^reply_user_(\d+)$"))
 async def admin_reply_prompt(callback: types.CallbackQuery, state: FSMContext):
@@ -313,9 +307,10 @@ async def send_admin_reply(message: types.Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"❌ Failed to send reply: {e}")
 
-@dp.callback_query(F.data == "menu_withdraw")
-async def withdraw_menu(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
+# 💳 Withdraw Button
+@dp.message(F.text == "💳 Withdraw")
+async def withdraw_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
     min_w = float(get_setting("min_withdraw"))
     
     conn = sqlite3.connect("bot_database.db")
@@ -327,12 +322,11 @@ async def withdraw_menu(callback: types.CallbackQuery, state: FSMContext):
     balance = row[0] if row else 0.0
     
     if balance < min_w:
-        await callback.answer(f"❌ Minimum withdrawal amount is ₹{min_w}. Your balance is ₹{balance:.2f}", show_alert=True)
+        await message.answer(f"❌ Minimum withdrawal amount is ₹{min_w}. Your balance is ₹{balance:.2f}", reply_markup=get_main_keyboard())
         return
         
-    await callback.message.edit_text(
+    await message.answer(
         f"💳 **Withdrawal Section**\n\nYour Balance: `₹{balance:.2f}`\nMinimum Withdraw: `₹{min_w}`\n\nPlease enter your **UPI ID** (e.g., username@paytm / ybl):",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Back", callback_data="back_home")]]),
         parse_mode="Markdown"
     )
     await state.set_state(WithdrawStates.waiting_for_upi)
@@ -373,7 +367,7 @@ async def process_withdraw_amount(message: types.Message, state: FSMContext):
     min_w = float(get_setting("min_withdraw"))
     if amount < min_w or amount > balance:
         conn.close()
-        await message.answer(f"❌ Invalid amount. Must be between ₹{min_w} and ₹{balance:.2f}", reply_markup=main_menu())
+        await message.answer(f"❌ Invalid amount. Must be between ₹{min_w} and ₹{balance:.2f}", reply_markup=get_main_keyboard())
         return
         
     cursor.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (amount, user_id))
@@ -392,7 +386,7 @@ async def process_withdraw_amount(message: types.Message, state: FSMContext):
         parse_mode="Markdown"
     )
     
-    await message.answer("✅ **Withdrawal Request Submitted!** Admin will review and process your payment shortly.", reply_markup=main_menu(), parse_mode="Markdown")
+    await message.answer("✅ **Withdrawal Request Submitted!** Admin will review and process your payment shortly.", reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 @dp.callback_query(F.data.startswith("wd_"))
 async def admin_wd_action(callback: types.CallbackQuery):
@@ -516,7 +510,7 @@ async def cmd_userlist(message: types.Message):
             
     await message.reply_document(types.FSInputFile(filename), caption="📊 **Complete User Database Export**", parse_mode="Markdown")
 
-# Handle WebApp Data (Fixed & works when sent from reply button WebApp)
+# Mini App থেকে আসা data হ্যান্ডলার (Reply Keyboard-এর বাটন দিয়ে খোলার কারণে tg.sendData কাজ করবে)
 @dp.message(F.web_app_data)
 async def web_app_data_handler(message: types.Message):
     try:
@@ -530,7 +524,7 @@ async def web_app_data_handler(message: types.Message):
             
             cursor.execute("UPDATE users SET balance = balance + ?, ads_watched = ads_watched + 1 WHERE user_id = ?", (ad_reward, user_id))
             
-            # 5% Referral Commission
+            # Referral commission
             cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
             if row and row[0]:
@@ -538,17 +532,17 @@ async def web_app_data_handler(message: types.Message):
                 commission = ad_reward * 0.05
                 cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (commission, ref_id))
                 try:
-                    await bot.send_message(ref_id, f"💸 **Referral Commission:** You earned `₹{commission:.4f}` (5% of your referral's ad watch reward).", parse_mode="Markdown")
+                    await bot.send_message(ref_id, f"💸 **Referral Commission:** You earned `₹{commission:.4f}`.", parse_mode="Markdown")
                 except:
                     pass
                     
             conn.commit()
             conn.close()
             
-            # Short reward notification
-            await message.reply(f"✅ **Reward Credited!**\n\n+₹{ad_reward:.2f} has been added to your balance.", parse_mode="Markdown")
+            # চ্যাটে কনফার্মেশন পাঠানো
+            await message.reply(f"✅ **Reward Credited!**\n\n+₹{ad_reward:.2f} has been added to your balance.", reply_markup=get_main_keyboard(), parse_mode="Markdown")
     except Exception as e:
-        await message.reply("❌ Error processing reward. Please contact support.")
+        await message.reply("❌ Error processing reward.", reply_markup=get_main_keyboard())
 
 async def main():
     flask_thread = Thread(target=run_flask)
